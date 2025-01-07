@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Developer Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+
+        .header {
+            background-color: #333;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            margin: 0;
+        }
+
+        .header a {
+            color: white;
+            text-decoration: none;
+            margin-left: 1rem;
+        }
+
+        .content {
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .project-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .project-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .project-card h3 {
+            margin-top: 0;
+            color: #333;
+            font-size: 1.2rem;
+        }
+
+        .project-desc {
+            color: #666;
+            margin: 1rem 0;
+            line-height: 1.4;
+            white-space: pre-line;
+        }
+
+        .project-meta {
+            font-size: 0.9rem;
+            color: #888;
+            margin-bottom: 1rem;
+        }
+
+        .apply-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.3s;
+            width: 100%;
+        }
+
+        .apply-btn:hover {
+            background-color: #45a049;
+        }
+
+        .apply-btn.applied {
+            background-color: #666;
+            cursor: not-allowed;
+        }
+
+        .flash-messages {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 1rem 0;
+        }
+
+        .flash-message {
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+        }
+
+        .flash-success {
+            background-color: #dff0d8;
+            color: #3c763d;
+            border: 1px solid #d6e9c6;
+        }
+
+        .flash-danger {
+            background-color: #f2dede;
+            color: #a94442;
+            border: 1px solid #ebccd1;
+        }
+
+        .no-projects {
+            text-align: center;
+            color: #666;
+            padding: 2rem;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .auth-btn {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 1rem;
+        }
+
+        .auth-btn:hover {
+            background-color: #1976D2;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 500px;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: black;
+        }
+
+        .auth-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .github-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background-color: #24292e;
+            color: white;
+            text-decoration: none;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+
+        .github-btn img {
+            width: 20px;
+            height: 20px;
+        }
+
+        .submit-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .submit-btn:hover {
+            background-color: #45a049;
+        }
+
+        .auth-status {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-left: 1rem;
+        }
+
+        .auth-indicator {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        .auth-complete {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+
+        .auth-pending {
+            background-color: #fcf8e3;
+            color: #8a6d3b;
+        }
+
+        .auth-btn {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .auth-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .check-icon {
+            color: #4CAF50;
+            margin-right: 0.5rem;
+        }
+
+        .selected-projects-section {
+            margin-bottom: 3rem;
+        }
+
+        .project-card.selected {
+            border: 2px solid #4CAF50;
+        }
+
+        .status-selected {
+            background-color: #4CAF50;
+            color: white;
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .project-meta strong {
+            color: #333;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>Welcome, {{ username }}</h1>
+        <div class="auth-status">
+            {% if is_authorized %}
+                <span class="auth-indicator auth-complete">
+                    <span class="check-icon">✓</span>
+                    Authorized
+                </span>
+            {% else %}
+                <button onclick="openAuthModal()" class="auth-btn">Authorization Required</button>
+            {% endif %}
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </div>
+    </div>
+
+    <div class="content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <ul class="flash-messages">
+                    {% for category, message in messages %}
+                        <li class="flash-message flash-{{ category }}">{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Selected Projects Section -->
+        {% if selected_projects %}
+        <div class="selected-projects-section">
+            <h2>Your Selected Projects</h2>
+            <div class="project-grid">
+                {% for project in selected_projects %}
+                <div class="project-card selected">
+                    <div class="project-status status-selected">Selected</div>
+                    <h3>{{ project[0] }}</h3>
+                    <p class="project-desc">{{ project[1] }}</p>
+                    <div class="project-meta">
+                        <p><strong>Founder:</strong> {{ project[2] }}</p>
+                        <p><strong>Email:</strong> {{ project[5] }}</p>
+                        <p><strong>WhatsApp:</strong> {{ project[6] }}</p>
+                        <p><strong>Selected on:</strong> {{ project[3]|datetime }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Available Projects Section -->
+        <h2>Available Projects</h2>
+        {% if active_projects %}
+            <div class="project-grid">
+                {% for project in active_projects %}
+                <div class="project-card">
+                    <h3>{{ project[0] }}</h3>
+                    <p class="project-desc">{{ project[1] }}</p>
+                    <div class="project-meta">
+                        <p>Posted by: {{ project[2] }}</p>
+                        <p>Posted on: {{ project[3]|datetime }}</p>
+                    </div>
+                    <form action="{{ url_for('apply_project', project_id=project[4]) }}" method="POST">
+                        <button type="submit" 
+                                class="apply-btn {% if project[4] in applied_projects %}applied{% endif %}"
+                                {% if project[4] in applied_projects or not is_authorized %}disabled{% endif %}>
+                            {% if project[4] in applied_projects %}
+                                Already Applied
+                            {% elif not is_authorized %}
+                                Authorization Required
+                            {% else %}
+                                Apply Now
+                            {% endif %}
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="no-projects">
+                <p>No projects available at the moment.</p>
+            </div>
+        {% endif %}
+    </div>
+
+    {% if not is_authorized %}
+    <div id="authModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Developer Authorization</h2>
+            
+            <div class="auth-section">
+                <h3>Add CV Link</h3>
+                <form action="{{ url_for('save_cv_link') }}" method="POST">
+                    <div style="margin-bottom: 10px;">
+                        <label for="cv_link">Google Drive Link to your CV:</label>
+                        <input type="url" 
+                               id="cv_link" 
+                               name="cv_link" 
+                               placeholder="https://drive.google.com/..." 
+                               required 
+                               style="width: 100%; padding: 8px; margin-top: 5px;">
+                    </div>
+                    <button type="submit" class="submit-btn">Save CV Link</button>
+                </form>
+                <p style="font-size: 0.9em; color: #666; margin-top: 10px;">
+                    Please make sure your CV is accessible via the shared link
+                </p>
+            </div>
+
+            <div class="auth-section">
+                <h3>GitHub Authorization</h3>
+                <a href="{{ url_for('github_auth') }}" class="github-btn">
+                    <img src="{{ url_for('static', filename='github-mark.png') }}" alt="GitHub Logo">
+                    Connect with GitHub
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <script>
+        {% if not is_authorized %}
+        const modal = document.getElementById("authModal");
+        const closeBtn = document.getElementsByClassName("close")[0];
+
+        function openAuthModal() {
+            modal.style.display = "block";
+        }
+
+        closeBtn.onclick = function() {
+            modal.style.display = "none";
+        }
+
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+        {% endif %}
+    </script>
+</body>
+</html>
