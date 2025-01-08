@@ -16,14 +16,14 @@ GITHUB_CLIENT_ID = os.environ.get('GITHUB_CLIENT_ID', '')
 GITHUB_CLIENT_SECRET = os.environ.get('GITHUB_CLIENT_SECRET', '')
 GITHUB_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize'
 GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token'
-GITHUB_CALLBACK_URL = os.environ.get('GITHUB_CALLBACK_URL', 'http://localhost:5000/github-callback')
+GITHUB_CALLBACK_URL = os.environ.get('GITHUB_CALLBACK_URL', 'https://meet-xi-two.vercel.app/github-callback')
 
 # Add database configuration
 DB_CONFIG = {
     'host': 'sql12.freesqldatabase.com',
-    'database': 'sql12756481',
-    'user': 'sql12756481',
-    'password': 'IYiqPGzplj',
+    'database': 'sql12756552',
+    'user': 'sql12756552',
+    'password': 'JD97H6Pd9t',
     'port': 3306
 }
 
@@ -35,7 +35,7 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Create users table with new columns
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
