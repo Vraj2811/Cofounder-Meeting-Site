@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
-import sqlite3
+import mysql.connector
 import os
 from datetime import datetime
 from werkzeug.utils import secure_filename
@@ -18,27 +18,33 @@ GITHUB_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize'
 GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token'
 GITHUB_CALLBACK_URL = os.environ.get('GITHUB_CALLBACK_URL', 'http://localhost:5000/github-callback')
 
-# Database setup
+# Add database configuration
+DB_CONFIG = {
+    'host': 'sql12.freesqldatabase.com',
+    'database': 'sql12756481',
+    'user': 'sql12756481',
+    'password': 'IYiqPGzplj',
+    'port': 3306
+}
+
+# Modify the database connection function
+def get_db_connection():
+    return mysql.connector.connect(**DB_CONFIG)
+
+# Modify init_db function
 def init_db():
-    if not os.path.exists('database.db'):
-        open('database.db', 'w').close()
-    conn = sqlite3.connect('database.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Drop existing tables if they exist
-    # cursor.execute('DROP TABLE IF EXISTS project_applications')
-    # cursor.execute('DROP TABLE IF EXISTS projects')
-    # cursor.execute('DROP TABLE IF EXISTS users')
     
     # Create users table with new columns
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            whatsapp_number TEXT NOT NULL,
-            role TEXT NOT NULL CHECK(role IN ('Developer', 'Founder')),
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(255) UNIQUE NOT NULL,
+            email VARCHAR(255) UNIQUE NOT NULL,
+            password VARCHAR(255) NOT NULL,
+            whatsapp_number VARCHAR(255) NOT NULL,
+            role VARCHAR(50) NOT NULL CHECK(role IN ('Developer', 'Founder')),
             cv_link TEXT,
             github_token TEXT
         )
@@ -47,11 +53,11 @@ def init_db():
     # Create projects table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS projects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT UNIQUE NOT NULL,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255) UNIQUE NOT NULL,
             description TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            founder_name TEXT NOT NULL,
+            founder_name VARCHAR(255) NOT NULL,
             is_completed BOOLEAN DEFAULT FALSE,
             FOREIGN KEY (founder_name) REFERENCES users (username)
         )
@@ -60,10 +66,10 @@ def init_db():
     # Create project_applications table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS project_applications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            status TEXT DEFAULT 'pending',
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            user_id INT NOT NULL,
+            status VARCHAR(50) DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES projects (id),
             FOREIGN KEY (user_id) REFERENCES users (id),
@@ -85,19 +91,18 @@ def login():
         email = request.form['email']
         password = request.form['password']
         
-        # Verify credentials
-        conn = sqlite3.connect('database.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE email = ? AND password = ?', (email, password))
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)  # Use dictionary cursor for named columns
+        cursor.execute('SELECT * FROM users WHERE email = %s AND password = %s', (email, password))
         user = cursor.fetchone()
         conn.close()
 
         if user:
-            session['user_id'] = user[0]
-            session['username'] = user[1]
-            session['role'] = user[5]
-            flash(f"Welcome back, {user[1]}!", "success")
-            if user[5] == 'Developer':
+            session['user_id'] = user['id']
+            session['username'] = user['username']
+            session['role'] = user['role']
+            flash(f"Welcome back, {user['username']}!", "success")
+            if user['role'] == 'Developer':
                 return redirect(url_for('developer_dashboard'))
             return redirect(url_for('founder_dashboard'))  
         else:
@@ -114,15 +119,15 @@ def register():
         role = request.form['role']
 
         try:
-            conn = sqlite3.connect('database.db')
+            conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute('INSERT INTO users (username, email, password, whatsapp_number, role) VALUES (?, ?, ?, ?, ?)',
+            cursor.execute('INSERT INTO users (username, email, password, whatsapp_number, role) VALUES (%s, %s, %s, %s, %s)',
                            (username, email, password, whatsapp_number, role))
             conn.commit()
             conn.close()
             flash("Registration successful! Please log in.", "success")
             return redirect(url_for('login'))
-        except sqlite3.IntegrityError:
+        except mysql.connector.IntegrityError:
             flash("Username or email already exists.", "danger")
     return render_template('register.html')
 
@@ -132,14 +137,14 @@ def developer_dashboard():
         flash("Unauthorized access.", "danger")
         return redirect(url_for('login'))
     
-    conn = sqlite3.connect('database.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     # Check if developer is authorized (has both CV and GitHub)
     cursor.execute('''
         SELECT cv_link, github_token 
         FROM users 
-        WHERE id = ?
+        WHERE id = %s
     ''', (session['user_id'],))
     user_auth = cursor.fetchone()
     is_authorized = user_auth[0] is not None and user_auth[1] is not None
@@ -166,7 +171,7 @@ def developer_dashboard():
         FROM projects p
         JOIN project_applications pa ON p.id = pa.project_id
         JOIN users u ON p.founder_name = u.username
-        WHERE pa.user_id = ? 
+        WHERE pa.user_id = %s 
         AND pa.status = 'accepted'
         AND p.is_completed = TRUE
         ORDER BY p.created_at DESC
@@ -177,7 +182,7 @@ def developer_dashboard():
     cursor.execute('''
         SELECT project_id 
         FROM project_applications 
-        WHERE user_id = ?
+        WHERE user_id = %s
     ''', (session['user_id'],))
     applied_projects = {row[0] for row in cursor.fetchall()}
     
@@ -198,17 +203,17 @@ def apply_project(project_id):
         flash("Unauthorized access.", "danger")
         return redirect(url_for('login'))
     
-    conn = sqlite3.connect('database.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
         cursor.execute('''
             INSERT INTO project_applications (project_id, user_id)
-            VALUES (?, ?)
+            VALUES (%s, %s)
         ''', (project_id, session['user_id']))
         conn.commit()
         flash("Successfully applied to the project!", "success")
-    except sqlite3.IntegrityError:
+    except mysql.connector.IntegrityError:
         flash("You have already applied to this project.", "danger")
     
     conn.close()
@@ -220,14 +225,14 @@ def founder_dashboard():
         flash("Unauthorized access.", "danger")
         return redirect(url_for('login'))
     
-    conn = sqlite3.connect('database.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     # Get all projects, ordered by status (active first) and then by creation date
     cursor.execute('''
         SELECT id, title, description, created_at, is_completed 
         FROM projects 
-        WHERE founder_name = ?
+        WHERE founder_name = %s
         ORDER BY 
             is_completed ASC,  -- False (0) comes before True (1)
             created_at DESC    -- Most recent first within each group
@@ -241,7 +246,7 @@ def founder_dashboard():
             SELECT COUNT(*), 
                    SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) as accepted
             FROM project_applications 
-            WHERE project_id = ?
+            WHERE project_id = %s
         ''', (project[0],))
         stats = cursor.fetchone()
         project_stats[project[0]] = {
@@ -268,11 +273,11 @@ def create_project():
         title = request.form['title']
         description = request.form['description']
         
-        conn = sqlite3.connect('database.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO projects (title, description, founder_name)
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
         ''', (title, description, session['username']))
         conn.commit()
         conn.close()
@@ -288,11 +293,11 @@ def edit_project(project_id):
         flash("Unauthorized access.", "danger")
         return redirect(url_for('login'))
 
-    conn = sqlite3.connect('database.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     # Verify project ownership
-    cursor.execute('SELECT * FROM projects WHERE id = ? AND founder_name = ?', 
+    cursor.execute('SELECT * FROM projects WHERE id = %s AND founder_name = %s', 
                   (project_id, session['username']))
     project = cursor.fetchone()
     
@@ -306,8 +311,8 @@ def edit_project(project_id):
         
         cursor.execute('''
             UPDATE projects 
-            SET title = ?, description = ? 
-            WHERE id = ? AND founder_name = ?
+            SET title = %s, description = %s 
+            WHERE id = %s AND founder_name = %s
         ''', (title, description, project_id, session['username']))
         conn.commit()
         flash("Project updated successfully!", "success")
@@ -322,11 +327,11 @@ def delete_project(project_id):
         flash("Unauthorized access.", "danger")
         return redirect(url_for('login'))
 
-    conn = sqlite3.connect('database.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     # Verify project ownership
-    cursor.execute('SELECT * FROM projects WHERE id = ? AND founder_name = ?', 
+    cursor.execute('SELECT * FROM projects WHERE id = %s AND founder_name = %s', 
                   (project_id, session['username']))
     project = cursor.fetchone()
     
@@ -334,10 +339,10 @@ def delete_project(project_id):
         flash("Project not found or unauthorized.", "danger")
     else:
         # Delete associated applications first
-        cursor.execute('DELETE FROM project_applications WHERE project_id = ?', 
+        cursor.execute('DELETE FROM project_applications WHERE project_id = %s', 
                       (project_id,))
         # Delete the project
-        cursor.execute('DELETE FROM projects WHERE id = ?', (project_id,))
+        cursor.execute('DELETE FROM projects WHERE id = %s', (project_id,))
         conn.commit()
         flash("Project deleted successfully!", "success")
     
@@ -350,11 +355,11 @@ def view_applications(project_id):
         flash("Unauthorized access.", "danger")
         return redirect(url_for('login'))
 
-    conn = sqlite3.connect('database.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     # Verify project ownership
-    cursor.execute('SELECT * FROM projects WHERE id = ? AND founder_name = ?', 
+    cursor.execute('SELECT * FROM projects WHERE id = %s AND founder_name = %s', 
                   (project_id, session['username']))
     project = cursor.fetchone()
     
@@ -367,7 +372,7 @@ def view_applications(project_id):
         SELECT u.username, u.email, u.whatsapp_number, pa.created_at, pa.status
         FROM users u 
         JOIN project_applications pa ON u.id = pa.user_id 
-        WHERE pa.project_id = ?
+        WHERE pa.project_id = %s
         ORDER BY pa.created_at DESC
     ''', (project_id,))
     applications = cursor.fetchall()
@@ -399,11 +404,11 @@ def get_applications(project_id):
     if 'user_id' not in session or session.get('role') != 'Founder':
         return jsonify({'error': 'Unauthorized'}), 403
 
-    conn = sqlite3.connect('database.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     # Verify project ownership and get project status
-    cursor.execute('SELECT is_completed FROM projects WHERE id = ? AND founder_name = ?', 
+    cursor.execute('SELECT is_completed FROM projects WHERE id = %s AND founder_name = %s', 
                   (project_id, session['username']))
     project = cursor.fetchone()
     
@@ -416,7 +421,7 @@ def get_applications(project_id):
             SELECT u.username, pa.created_at, u.cv_link, u.whatsapp_number
             FROM users u 
             JOIN project_applications pa ON u.id = pa.user_id 
-            WHERE pa.project_id = ? AND pa.status = 'accepted'
+            WHERE pa.project_id = %s AND pa.status = 'accepted'
             LIMIT 1
         ''', (project_id,))
     else:
@@ -425,7 +430,7 @@ def get_applications(project_id):
             SELECT u.username, pa.created_at, u.cv_link, u.id
             FROM users u 
             JOIN project_applications pa ON u.id = pa.user_id 
-            WHERE pa.project_id = ?
+            WHERE pa.project_id = %s
             ORDER BY pa.created_at DESC
         ''', (project_id,))
     
@@ -475,9 +480,9 @@ def save_cv_link():
         return redirect(url_for('developer_dashboard'))
 
     # Save link in database
-    conn = sqlite3.connect('database.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('UPDATE users SET cv_link = ? WHERE id = ?', 
+    cursor.execute('UPDATE users SET cv_link = %s WHERE id = %s', 
                   (cv_link, session['user_id']))
     conn.commit()
     conn.close()
@@ -515,9 +520,9 @@ def github_callback():
         )
 
         # Store the token in the database
-        conn = sqlite3.connect('database.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('UPDATE users SET github_token = ? WHERE id = ?', 
+        cursor.execute('UPDATE users SET github_token = %s WHERE id = %s', 
                       (token['access_token'], session['user_id']))
         conn.commit()
         conn.close()
@@ -534,12 +539,12 @@ def finalize_project(project_id, developer_id):
     if 'user_id' not in session or session.get('role') != 'Founder':
         return jsonify({'error': 'Unauthorized'}), 403
 
-    conn = sqlite3.connect('database.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
         # Verify project ownership
-        cursor.execute('SELECT * FROM projects WHERE id = ? AND founder_name = ?', 
+        cursor.execute('SELECT * FROM projects WHERE id = %s AND founder_name = %s', 
                       (project_id, session['username']))
         project = cursor.fetchone()
         
@@ -547,17 +552,17 @@ def finalize_project(project_id, developer_id):
             return jsonify({'error': 'Project not found'}), 404
 
         # Mark project as completed
-        cursor.execute('UPDATE projects SET is_completed = TRUE WHERE id = ?', 
+        cursor.execute('UPDATE projects SET is_completed = TRUE WHERE id = %s', 
                       (project_id,))
         
         # Update the selected application status
         cursor.execute('''
             UPDATE project_applications 
             SET status = CASE 
-                WHEN user_id = ? THEN 'accepted'
+                WHEN user_id = %s THEN 'accepted'
                 ELSE 'rejected'
             END 
-            WHERE project_id = ?
+            WHERE project_id = %s
         ''', (developer_id, project_id))
         
         conn.commit()
@@ -571,5 +576,5 @@ def finalize_project(project_id, developer_id):
 
 if __name__ == '__main__':
     init_db()
-    app.run(host='0.0.0.0', port=5000)
+    app.run()
 
